@@ -142,12 +142,6 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
         </div>
       )}
 
-      {/* Info message */}
-      {!isProcessing && !error && regions.length > 0 && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-          Output will be image-based for maximum security
-        </p>
-      )}
     </div>
   );
 };

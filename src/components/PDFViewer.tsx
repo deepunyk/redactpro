@@ -10,8 +10,25 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { renderPageToCanvas } from '../lib/pdfExtractor';
+import { renderPageToCanvas, getTextLayerData } from '../lib/pdfExtractor';
 import type { RedactionRegion } from '../lib/types';
+
+/**
+ * Measure the browser's actual font ascent ratio using canvas metrics.
+ * This is the same technique PDF.js uses internally.
+ */
+function measureAscentRatio(): number {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  ctx.font = '12px sans-serif';
+  const metrics = ctx.measureText('');
+  const ascent = metrics.fontBoundingBoxAscent;
+  const descent = metrics.fontBoundingBoxDescent;
+  if (ascent) {
+    return ascent / (ascent + descent);
+  }
+  return 0.8; // fallback
+}
 
 interface PDFViewerProps {
   file: File;
@@ -55,7 +72,7 @@ interface DrawingState {
   currentY: number;
 }
 
-const HANDLE_SIZE = 8;
+const HANDLE_SIZE = 12;
 const MIN_SIZE = 10;
 // Fixed rendering scale — canvas always renders at this quality regardless of zoom
 const RENDERING_SCALE = 2.0;
@@ -101,7 +118,16 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   const [hoveredHandle, setHoveredHandle] = useState<string | null>(null);
 
   // Pan/draw mode
-  const [interactionMode, setInteractionMode] = useState<'draw' | 'pan'>('draw');
+  const [interactionMode, setInteractionMode] = useState<'draw' | 'pan' | 'select'>('draw');
+
+  const switchMode = useCallback((mode: 'draw' | 'pan' | 'select') => {
+    // Clear any browser text selection when switching modes
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setInteractionMode(mode);
+  }, []);
+  // Ref for PDF.js text layer container
+  const textLayerRef = useRef<HTMLDivElement>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const panStateRef = useRef({
@@ -206,9 +232,11 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
         e.preventDefault();
         handleZoomOut();
       } else if (e.key === 'h' || e.key === 'H') {
-        setInteractionMode('pan');
+        switchMode('pan');
       } else if (e.key === 'd' || e.key === 'D') {
-        setInteractionMode('draw');
+        switchMode('draw');
+      } else if (e.key === 's' || e.key === 'S') {
+        switchMode('select');
       } else if (e.key === ' ') {
         e.preventDefault();
         setSpaceHeld(true);
@@ -271,6 +299,9 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
 
   // Handle mouse down on overlay (start drawing or select region)
   const handleOverlayMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Select mode — let native text selection work, don't intercept
+    if (effectiveMode === 'select') return;
+
     // Pan mode — start scrolling by drag
     if (effectiveMode === 'pan') {
       if (containerRef.current) {
@@ -327,6 +358,9 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
 
   // Handle mouse move (drag, resize, or draw)
   const handleOverlayMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Select mode — don't interfere with native text selection
+    if (effectiveMode === 'select') return;
+
     // Pan mode — scroll the container
     if (isPanning && containerRef.current) {
       const dx = e.clientX - panStateRef.current.startX;
@@ -632,6 +666,88 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
     };
   }, [file]);
 
+  // Render text layer for select mode using direct coordinate transforms
+  useEffect(() => {
+    let cancelled = false;
+
+    const renderTextLayer = async () => {
+      const container = textLayerRef.current;
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      if (interactionMode !== 'select' || !file || actualScale <= 0) return;
+
+      try {
+        const { textContent, viewport } = await getTextLayerData(file, currentPage, actualScale);
+        if (cancelled) return;
+
+        const ascentRatio = measureAscentRatio();
+        const vpTransform = viewport.transform;
+
+        // Use a DocumentFragment to batch DOM writes
+        const fragment = document.createDocumentFragment();
+
+        for (const item of textContent.items) {
+          const str = (item as any).str;
+          if (!str || !str.trim()) continue;
+
+          const itemTransform = (item as any).transform;
+          if (!itemTransform) continue;
+
+          // Combine viewport transform with text item transform.
+          // This gives coordinates in the same space as the CSS display.
+          const tx = [
+            vpTransform[0] * itemTransform[0] + vpTransform[2] * itemTransform[1],
+            vpTransform[1] * itemTransform[0] + vpTransform[3] * itemTransform[1],
+            vpTransform[0] * itemTransform[2] + vpTransform[2] * itemTransform[3],
+            vpTransform[1] * itemTransform[2] + vpTransform[3] * itemTransform[3],
+            vpTransform[0] * itemTransform[4] + vpTransform[2] * itemTransform[5] + vpTransform[4],
+            vpTransform[1] * itemTransform[4] + vpTransform[3] * itemTransform[5] + vpTransform[5],
+          ];
+
+          const fontHeight = Math.hypot(tx[2], tx[3]);
+          const fontAscent = fontHeight * ascentRatio;
+
+          // tx[4] = x position from left (CSS pixels)
+          // tx[5] = baseline from top (CSS pixels)
+          const left = tx[4];
+          const top = tx[5] - fontAscent;
+
+          const span = document.createElement('span');
+          span.textContent = str;
+          span.style.position = 'absolute';
+          span.style.left = `${left}px`;
+          span.style.top = `${top}px`;
+          span.style.fontSize = `${fontHeight}px`;
+          span.style.lineHeight = '1';
+          span.style.color = 'transparent';
+          span.style.whiteSpace = 'pre';
+          span.style.pointerEvents = 'auto';
+
+          fragment.appendChild(span);
+        }
+
+        if (!cancelled) {
+          container.appendChild(fragment);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Error rendering text layer:', error);
+        }
+      }
+    };
+
+    renderTextLayer();
+
+    return () => {
+      cancelled = true;
+      if (textLayerRef.current) {
+        textLayerRef.current.innerHTML = '';
+      }
+    };
+  }, [file, currentPage, interactionMode, actualScale]);
+
   // Cleanup canvas and RAF on unmount
   useEffect(() => {
     return () => {
@@ -669,6 +785,9 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   }, [actualScale]);
 
   const getCursor = useCallback(() => {
+    if (effectiveMode === 'select') {
+      return 'text';
+    }
     if (effectiveMode === 'pan') {
       return isPanning ? 'grabbing' : 'grab';
     }
@@ -727,7 +846,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
         {/* Interaction mode toggle */}
         <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
           <button
-            onClick={() => setInteractionMode('draw')}
+            onClick={() => switchMode('draw')}
             className={`p-2 rounded-md transition-colors ${
               interactionMode === 'draw' && !spaceHeld
                 ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400'
@@ -741,7 +860,21 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
             </svg>
           </button>
           <button
-            onClick={() => setInteractionMode('pan')}
+            onClick={() => switchMode('select')}
+            className={`p-2 rounded-md transition-colors ${
+              interactionMode === 'select' && !spaceHeld
+                ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+            title="Select text mode (S)"
+            aria-label="Select text mode"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6M12 3v18M9 21h6M7 7h2M17 7h-2M7 17h2M17 17h-2" />
+            </svg>
+          </button>
+          <button
+            onClick={() => switchMode('pan')}
             className={`p-2 rounded-md transition-colors ${
               interactionMode === 'pan' || spaceHeld
                 ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400'
@@ -848,6 +981,15 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
               onMouseUp={handleOverlayMouseUp}
               onMouseLeave={handleOverlayMouseUp}
             >
+              {/* Text layer for select mode */}
+              {interactionMode === 'select' && (
+                <div
+                  ref={textLayerRef}
+                  className="absolute inset-0 select-text"
+                  onMouseDown={(e) => e.stopPropagation()}
+                />
+              )}
+
               {/* Render redaction zones */}
               {currentPageRegions().map((region) => {
                 const { displayX, displayY } = pdfToDisplayCoords(region.x, region.y, region.height);
@@ -876,27 +1018,35 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
                     {/* Selection handles */}
                     {isSelected && onRegionsChange && (
                       <>
-                        {/* Corner handles */}
+                        {/* Corner handles - visible dot + larger transparent hit area */}
                         <div
-                          className="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm cursor-nwse-resize"
-                          style={{ left: -4, top: -4 }}
+                          className="absolute cursor-nwse-resize"
+                          style={{ left: -10, top: -10, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           onMouseDown={(e) => handleResizeHandleMouseDown(e, 'nw', region.id)}
-                        />
+                        >
+                          <div className="w-3 h-3 bg-blue-500 border border-white rounded-sm" />
+                        </div>
                         <div
-                          className="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm cursor-nesw-resize"
-                          style={{ right: -4, top: -4 }}
+                          className="absolute cursor-nesw-resize"
+                          style={{ right: -10, top: -10, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           onMouseDown={(e) => handleResizeHandleMouseDown(e, 'ne', region.id)}
-                        />
+                        >
+                          <div className="w-3 h-3 bg-blue-500 border border-white rounded-sm" />
+                        </div>
                         <div
-                          className="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm cursor-nesw-resize"
-                          style={{ left: -4, bottom: -4 }}
+                          className="absolute cursor-nesw-resize"
+                          style={{ left: -10, bottom: -10, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           onMouseDown={(e) => handleResizeHandleMouseDown(e, 'sw', region.id)}
-                        />
+                        >
+                          <div className="w-3 h-3 bg-blue-500 border border-white rounded-sm" />
+                        </div>
                         <div
-                          className="absolute w-2 h-2 bg-blue-500 border border-white rounded-sm cursor-nwse-resize"
-                          style={{ right: -4, bottom: -4 }}
+                          className="absolute cursor-nwse-resize"
+                          style={{ right: -10, bottom: -10, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           onMouseDown={(e) => handleResizeHandleMouseDown(e, 'se', region.id)}
-                        />
+                        >
+                          <div className="w-3 h-3 bg-blue-500 border border-white rounded-sm" />
+                        </div>
                       </>
                     )}
 
@@ -945,7 +1095,11 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
       {/* Keyboard shortcuts hint */}
       <div className="mt-1 px-1">
         <p className="text-[10px] text-gray-500 dark:text-gray-400">
-          Draw zones • Click select • Drag move/resize • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">Del</kbd> remove • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">+/-</kbd> zoom • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">Space</kbd> pan
+          {effectiveMode === 'select' ? (
+            <>Select text to copy • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">Ctrl+C</kbd> copy • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">+/-</kbd> zoom</>
+          ) : (
+            <>Draw zones • Click select • Drag move/resize • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">Del</kbd> remove • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">+/-</kbd> zoom • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">Space</kbd> pan</>
+          )}
         </p>
       </div>
 

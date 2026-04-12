@@ -8,3 +8,4 @@ export * from './keywordMatcher';
 export * from './pdfRedactor';
 export * from './utils';
 export * from './pdfCache';
+export * from './patterns';

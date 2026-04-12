@@ -1,14 +1,13 @@
-# RedactPro - Client-Side PDF Redaction
+# AnonDocs - Secure PDF Redaction
 
-A professional, privacy-focused web application for redacting sensitive information from PDF documents entirely in the browser. No data is sent to any server.
+A privacy-focused web application for redacting sensitive information from PDF documents entirely in the browser. No data is sent to any server.
 
 ## Features
 
-- **100% Client-Side**: All PDF processing happens locally in your browser
 - **Keyword-Based Redaction**: Enter keywords to automatically find and redact matching text
 - **Image-Based Redaction**: Creates secure image-only PDFs with no recoverable text layer
 - **Real-Time Preview**: See exactly what will be redacted before downloading
-- **AI-Safe Output**: Redacted PDFs are safe to upload to AI services like ChatGPT and Claude
+- **Privacy First**: Your documents are processed locally and never uploaded to any server
 
 ## Use Case
 
@@ -16,9 +15,9 @@ Perfect for sanitizing PDFs before sharing with AI services that may use uploade
 
 ## Security
 
-- **No server uploads**: Your PDF never leaves your device
+- **Local Processing**: Your documents never leave your device
 - **Image-based redaction**: Redacted content cannot be recovered
-- **No analytics or tracking**: Privacy-first design
+- **No tracking**: Privacy-first design with no analytics
 
 ## Installation & Development
 

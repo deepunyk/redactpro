@@ -8,6 +8,7 @@ import { PDFUploader } from './components/PDFUploader';
 import { PDFViewer } from './components/PDFViewer';
 import { KeywordInput } from './components/KeywordInput';
 import { DownloadButton } from './components/DownloadButton';
+import { CompactAutoRedactPanel } from './components/AutoRedactPanel';
 import { extractTextContent, findMatches, PDFProcessingError, pdfCache } from './lib';
 import type { RedactionRegion } from './lib/types';
 
@@ -18,6 +19,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pages, setPages] = useState<any[]>([]);
 
   // Handle file selection
   const handleFileSelect = useCallback(async (selectedFile: File) => {
@@ -26,6 +28,15 @@ function App() {
     setRedactionRegions([]);
     setCurrentPage(1);
     setError(null);
+    setPages([]);
+
+    // Extract pages content for auto-redaction
+    try {
+      const extractedPages = await extractTextContent(selectedFile);
+      setPages(extractedPages);
+    } catch (err) {
+      console.error('Error extracting pages for auto-redaction:', err);
+    }
   }, []);
 
   // Handle keywords change - find matches in the PDF
@@ -33,12 +44,16 @@ function App() {
     setKeywords(newKeywords);
     setError(null);
 
+    // Preserve manually drawn regions and auto-redaction regions across keyword changes
+    const manualRegions = redactionRegions.filter(r => r.keyword === '');
+    const autoRedactRegions = redactionRegions.filter(r => r.keyword !== '' && !keywords.includes(r.keyword));
+
     if (file && newKeywords.length > 0) {
       setIsProcessing(true);
       try {
-        const pages = await extractTextContent(file);
-        const matches = findMatches(pages, newKeywords);
-        setRedactionRegions(matches);
+        const extractedPages = await extractTextContent(file);
+        const matches = findMatches(extractedPages, newKeywords);
+        setRedactionRegions([...matches, ...manualRegions, ...autoRedactRegions]);
       } catch (error) {
         console.error('Error finding matches:', error);
         let errorMessage = 'Failed to find matches in the PDF. ';
@@ -48,14 +63,14 @@ function App() {
           errorMessage += 'The file may be corrupted or in an unsupported format.';
         }
         setError(errorMessage);
-        setRedactionRegions([]);
+        setRedactionRegions([...manualRegions, ...autoRedactRegions]);
       } finally {
         setIsProcessing(false);
       }
     } else {
-      setRedactionRegions([]);
+      setRedactionRegions([...manualRegions, ...autoRedactRegions]);
     }
-  }, [file]);
+  }, [file, redactionRegions, keywords]);
 
   const handleReset = useCallback(() => {
     // Clear PDF cache when resetting
@@ -67,7 +82,15 @@ function App() {
     setRedactionRegions([]);
     setCurrentPage(1);
     setError(null);
+    setPages([]);
   }, [file]);
+
+  // Handle auto-redaction regions
+  const handleAutoRedactRegionsChange = useCallback((newRegions: RedactionRegion[]) => {
+    // Merge with existing manual regions
+    const manualRegions = redactionRegions.filter(r => r.keyword === '');
+    setRedactionRegions([...newRegions, ...manualRegions]);
+  }, [redactionRegions]);
 
   // Cleanup cache on unmount
   useEffect(() => {
@@ -84,13 +107,8 @@ function App() {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                RedactPro
+                AnonDocs
               </h1>
-              {!file && (
-                <span className="text-xs text-gray-500 dark:text-gray-400 hidden sm:inline">
-                  Client-side PDF redaction
-                </span>
-              )}
             </div>
             {file && (
               <button
@@ -110,27 +128,22 @@ function App() {
           /* Upload State */
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-10">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                Begin Redacting
+              <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                Secure PDF Redaction
               </h2>
               <p className="text-gray-600 dark:text-gray-400">
-                Upload a PDF document. All processing occurs locally in your browser.
+                Quickly find and redact sensitive information from your documents
               </p>
             </div>
             <PDFUploader onFileSelect={handleFileSelect} />
 
             {/* Security Notice */}
-            <div className="mt-10 p-5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            <div className="mt-10 p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
+              <div className="flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  <p className="font-medium mb-1">Enterprise-Grade Privacy</p>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Your documents never leave your device. All redaction is performed using client-side processing.
-                  </p>
-                </div>
+                <p>Your documents are processed locally and never uploaded to any server</p>
               </div>
             </div>
           </div>
@@ -138,20 +151,9 @@ function App() {
           /* Editor State */
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-6.5rem)]">
             {/* Left Panel - Controls */}
-            <div className="lg:col-span-1 space-y-3 overflow-y-auto pr-1">
-              {/* File Info */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-3">
-                <h3 className="font-medium text-gray-900 dark:text-white mb-1.5 text-xs">Document</h3>
-                <p className="text-xs text-gray-600 dark:text-gray-400 truncate" title={file.name}>
-                  {file.name}
-                </p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">
-                  {(file.size / 1024 / 1024).toFixed(2)} MB
-                </p>
-              </div>
-
+            <div className="lg:col-span-1 space-y-2 overflow-y-auto pr-1">
               {/* Keywords Input */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-3">
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-2.5">
                 <KeywordInput
                   keywords={keywords}
                   onKeywordsChange={handleKeywordsChange}
@@ -160,30 +162,36 @@ function App() {
 
                 {/* Error message */}
                 {error && (
-                  <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+                  <div className="mt-2 p-1.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
                     <p className="text-xs text-red-800 dark:text-red-300">{error}</p>
                   </div>
                 )}
+              </div>
 
-                {/* Match count indicator */}
-                {redactionRegions.length > 0 && (
-                  <div className="mt-3 p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded">
+              {/* Auto-Redaction Panel */}
+              {pages.length > 0 && (
+                <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-2.5">
+                  <CompactAutoRedactPanel
+                    pages={pages}
+                    onRedactionRegionsChange={handleAutoRedactRegionsChange}
+                    onPageChange={setCurrentPage}
+                    disabled={isProcessing}
+                  />
+                </div>
+              )}
+
+              {/* Quick Stats */}
+              {redactionRegions.length > 0 && (
+                <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-white">Redaction Summary</h3>
                     <div className="flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div>
-                        <p className="text-xs font-medium text-gray-900 dark:text-gray-100">
-                          {redactionRegions.length} match{redactionRegions.length !== 1 ? 'es' : ''} found
-                        </p>
-                        <p className="text-[10px] text-gray-600 dark:text-gray-400">
-                          Review zones before downloading
-                        </p>
-                      </div>
+                      <span className="text-2xl font-bold text-gray-900 dark:text-white">{redactionRegions.length}</span>
+                      <span className="text-xs text-gray-600 dark:text-gray-400">region{redactionRegions.length !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Download Button */}
               <DownloadButton file={file} regions={redactionRegions} />
@@ -217,7 +225,7 @@ function App() {
       {/* Footer - hidden in editor mode */}
       {!file && (
         <footer className="py-3 text-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
-          <p>Client-side processing. Verify redactions before sharing.</p>
+          <p>Always verify redactions before sharing documents</p>
         </footer>
       )}
     </div>

@@ -147,6 +147,56 @@ export async function getPageCount(file: File): Promise<number> {
 }
 
 /**
+ * Get text content for a specific page
+ * @param file - The PDF file
+ * @param pageNumber - The page number (1-indexed)
+ * @returns Promise resolving to page content with text items
+ */
+export async function getPageTextContent(file: File, pageNumber: number): Promise<PageContent> {
+  const pdf = await pdfCache.getDocument(file);
+  const page = await pdf.getPage(pageNumber);
+  const textContent = await page.getTextContent();
+  const viewport = page.getViewport({ scale: 1 });
+
+  const items: TextItem[] = textContent.items.map((item: any) => {
+    const transform = item.transform || [0, 0, 0, 0, 0, 0];
+    const x = transform[4] || 0;
+    const y = transform[5] || 0;
+    const width = item.width || 0;
+    const fontSize = Math.abs(transform[0]) || 12;
+
+    return {
+      text: item.str || '',
+      x,
+      y,
+      width: width || 0,
+      height: fontSize || 12,
+    };
+  });
+
+  return {
+    pageNumber,
+    items: items.filter(item => item.text.trim().length > 0),
+    pageHeight: viewport.height,
+    pageWidth: viewport.width,
+  };
+}
+
+/**
+ * Get raw text content and viewport for TextLayer rendering
+ * @param file - The PDF file
+ * @param pageNumber - The page number (1-indexed)
+ * @param scale - The viewport scale (should match display scale)
+ */
+export async function getTextLayerData(file: File, pageNumber: number, scale: number) {
+  const pdf = await pdfCache.getDocument(file);
+  const page = await pdf.getPage(pageNumber);
+  const viewport = page.getViewport({ scale });
+  const textContent = await page.getTextContent();
+  return { textContent, viewport };
+}
+
+/**
  * Render a PDF page to canvas for preview
  * @param file - The PDF file
  * @param pageNumber - The page number to render (1-indexed)
