@@ -5,7 +5,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { PatternSelector } from './PatternSelector';
 import { MatchNavigator } from './MatchNavigator';
-import { patternRegistry } from '../lib/patterns';
 import { findPatternMatchesWithPositions, matchesToRedactionRegions } from '../lib/patterns/patternMatcher';
 import type { PatternMatch } from '../lib/patterns/types';
 import type { PageContent, RedactionRegion } from '../lib/types';
@@ -23,7 +22,7 @@ export const AutoRedactPanel: React.FC<AutoRedactPanelProps> = ({
   pages,
   onRedactionRegionsChange,
   onPageChange,
-  currentPage,
+  currentPage: _currentPage,
   disabled = false,
   isProcessing = false,
 }) => {

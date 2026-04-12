@@ -34,7 +34,7 @@ export function findPatternMatches(
             width: match.width,
             height: match.height,
             matchedText: match.text,
-            keyword: match.patternId,
+            keyword: pattern.id,
           });
         });
       });

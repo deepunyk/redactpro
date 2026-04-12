@@ -2,7 +2,7 @@
  * Pattern Registry - Central pattern management and detection
  */
 
-import type { Pattern, PatternMatch, PatternGroup, PatternCategory } from './types';
+import type { Pattern, PatternGroup, PatternCategory } from './types';
 import type { PageContent } from '../types';
 
 export class PatternRegistry {

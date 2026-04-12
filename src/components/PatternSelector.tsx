@@ -9,7 +9,6 @@ import type { Pattern, PatternGroup } from '../lib/patterns/types';
 interface PatternSelectorProps {
   selectedPatterns: Set<string>;
   onPatternToggle: (patternId: string) => void;
-  onGroupToggle?: (groupId: string) => void;
   matchCounts?: Map<string, number>;
   disabled?: boolean;
   compact?: boolean;
@@ -18,7 +17,6 @@ interface PatternSelectorProps {
 export const PatternSelector: React.FC<PatternSelectorProps> = ({
   selectedPatterns,
   onPatternToggle,
-  onGroupToggle,
   matchCounts = new Map(),
   disabled = false,
   compact = false,
