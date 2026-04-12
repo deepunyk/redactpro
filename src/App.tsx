@@ -194,7 +194,7 @@ function App() {
               )}
 
               {/* Download Button */}
-              <DownloadButton file={file} regions={redactionRegions} />
+              <DownloadButton file={file} regions={redactionRegions} pages={pages} />
             </div>
 
             {/* Right Panel - PDF Viewer */}

@@ -1,21 +1,23 @@
 /**
  * DownloadButton Component
- * Triggers PDF redaction and downloads the result
+ * Triggers PDF redaction with text-layer preservation and downloads the result
  */
 
 import React, { useState, useEffect } from 'react';
-import { redactPDF } from '../lib/pdfRedactor';
-import type { RedactionRegion } from '../lib/types';
+import { redactPDFWithTextLayer } from '../lib/pdfTextRedactor';
+import type { RedactionRegion, PageContent } from '../lib/types';
 
 interface DownloadButtonProps {
   file: File;
   regions: RedactionRegion[];
+  pages: PageContent[];
   disabled?: boolean;
 }
 
 export const DownloadButton: React.FC<DownloadButtonProps> = ({
   file,
   regions,
+  pages,
   disabled = false,
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -41,8 +43,8 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
       const arrayBuffer = await file.arrayBuffer();
       const pdfBytes = new Uint8Array(arrayBuffer);
 
-      // Redact the PDF
-      const redactedBytes = await redactPDF(pdfBytes, regions, {
+      // Redact the PDF with text-layer preservation
+      const redactedBytes = await redactPDFWithTextLayer(pdfBytes, regions, pages, {
         scale: 2.0,
         onProgress: (current, total) => {
           setProgress(Math.round((current / total) * 100));
@@ -51,7 +53,6 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
       });
 
       // Create download link
-      // Create a new Uint8Array copy to ensure it's a regular ArrayBuffer, not SharedArrayBuffer
       const byteCopy = new Uint8Array(redactedBytes);
       const blob = new Blob([byteCopy], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
@@ -142,6 +143,12 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
         </div>
       )}
 
+      {/* Info about text-layer preservation */}
+      {regions.length > 0 && !isProcessing && (
+        <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+          Output preserves text for AI readability. Redacted content is removed.
+        </p>
+      )}
     </div>
   );
 };

@@ -54,19 +54,3 @@ export interface RedactionRegion {
   keyword: string;
 }
 
-/**
- * State of PDF processing
- */
-export type ProcessingState = 'idle' | 'loading' | 'processing' | 'complete' | 'error';
-
-/**
- * Result of PDF redaction
- */
-export interface RedactionResult {
-  /** The redacted PDF bytes */
-  pdfBytes: Uint8Array;
-  /** Number of regions redacted */
-  regionsRedacted: number;
-  /** Number of pages processed */
-  pagesProcessed: number;
-}
