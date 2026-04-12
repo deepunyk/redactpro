@@ -73,8 +73,8 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   const overlayRef = useRef<HTMLDivElement>(null);
   const [totalPages, setTotalPages] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [zoomMode, setZoomMode] = useState<ZoomMode>(1.5);
-  const [actualScale, setActualScale] = useState<number>(1.5);
+  const [zoomMode, setZoomMode] = useState<ZoomMode>('fit-width');
+  const [actualScale, setActualScale] = useState<number>(1);
   // Natural page dimensions at scale=1 (PDF points)
   const [pageDimensions, setPageDimensions] = useState({ width: 0, height: 0 });
 
@@ -692,9 +692,9 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   }, [effectiveMode, isPanning, dragState, hoveredHandle, hoveredRegion]);
 
   return (
-    <div className={`flex flex-col ${className}`}>
+    <div className={`flex flex-col h-full ${className}`}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between mb-4 px-2">
+      <div className="flex items-center justify-between mb-2 px-1">
         {/* Page controls */}
         <div className="flex items-center gap-2">
           <button
@@ -809,7 +809,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
       {/* Canvas container — scrollable when zoomed in */}
       <div
         ref={containerRef}
-        className="relative bg-gray-100 dark:bg-gray-800 rounded-lg overflow-auto min-h-[500px]"
+        className="relative bg-gray-100 dark:bg-gray-800 rounded-lg overflow-auto flex-1"
       >
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 z-10">
@@ -943,17 +943,17 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
       </div>
 
       {/* Keyboard shortcuts hint */}
-      <div className="mt-3 px-2">
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          Draw to add zones • Click to select • Drag to move • Drag corners to resize • <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-xs">Delete</kbd> to remove • <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-xs">+/-</kbd> to zoom • <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-xs">H</kbd> pan • <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-xs">D</kbd> draw • <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-xs">Space</kbd> hold to pan
+      <div className="mt-1 px-1">
+        <p className="text-[10px] text-gray-500 dark:text-gray-400">
+          Draw zones • Click select • Drag move/resize • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">Del</kbd> remove • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">+/-</kbd> zoom • <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono text-[9px]">Space</kbd> pan
         </p>
       </div>
 
       {/* Region count */}
       {currentPageRegions().length > 0 && (
-        <div className="mt-3 px-2">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {currentPageRegions().length} redaction zone{currentPageRegions().length !== 1 ? 's' : ''} on this page
+        <div className="mt-1 px-1">
+          <p className="text-[10px] text-gray-600 dark:text-gray-400">
+            {currentPageRegions().length} zone{currentPageRegions().length !== 1 ? 's' : ''} on page
           </p>
         </div>
       )}

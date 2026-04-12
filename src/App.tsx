@@ -79,23 +79,25 @@ function App() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">
+      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
                 RedactPro
               </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
-                Professional PDF redaction, entirely client-side
-              </p>
+              {!file && (
+                <span className="text-xs text-gray-500 dark:text-gray-400 hidden sm:inline">
+                  Client-side PDF redaction
+                </span>
+              )}
             </div>
             {file && (
               <button
                 onClick={handleReset}
-                className="px-4 py-2 text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                New Document
+                New
               </button>
             )}
           </div>
@@ -103,7 +105,7 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full overflow-hidden">
         {!file ? (
           /* Upload State */
           <div className="max-w-2xl mx-auto">
@@ -134,22 +136,22 @@ function App() {
           </div>
         ) : (
           /* Editor State */
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-6.5rem)]">
             {/* Left Panel - Controls */}
-            <div className="lg:col-span-1 space-y-5">
+            <div className="lg:col-span-1 space-y-3 overflow-y-auto pr-1">
               {/* File Info */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
-                <h3 className="font-medium text-gray-900 dark:text-white mb-2 text-sm">Document</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 truncate" title={file.name}>
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-3">
+                <h3 className="font-medium text-gray-900 dark:text-white mb-1.5 text-xs">Document</h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 truncate" title={file.name}>
                   {file.name}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                <p className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">
                   {(file.size / 1024 / 1024).toFixed(2)} MB
                 </p>
               </div>
 
               {/* Keywords Input */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-3">
                 <KeywordInput
                   keywords={keywords}
                   onKeywordsChange={handleKeywordsChange}
@@ -158,24 +160,24 @@ function App() {
 
                 {/* Error message */}
                 {error && (
-                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                    <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                  <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+                    <p className="text-xs text-red-800 dark:text-red-300">{error}</p>
                   </div>
                 )}
 
                 {/* Match count indicator */}
                 {redactionRegions.length > 0 && (
-                  <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="mt-3 p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded">
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <p className="text-xs font-medium text-gray-900 dark:text-gray-100">
                           {redactionRegions.length} match{redactionRegions.length !== 1 ? 'es' : ''} found
                         </p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                          Review and adjust zones before downloading
+                        <p className="text-[10px] text-gray-600 dark:text-gray-400">
+                          Review zones before downloading
                         </p>
                       </div>
                     </div>
@@ -188,8 +190,8 @@ function App() {
             </div>
 
             {/* Right Panel - PDF Viewer */}
-            <div className="lg:col-span-2">
-              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
+            <div className="lg:col-span-2 h-full min-h-0">
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-3 h-full flex flex-col">
                 {isProcessing ? (
                   <div className="flex items-center justify-center py-20">
                     <div className="text-center">
@@ -212,15 +214,12 @@ function App() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto py-6 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-800">
-        <p>
-          RedactPro creates image-based PDFs safe for sharing with AI services and external parties.
-        </p>
-        <p className="mt-1">
-          Always verify redaction results before sharing sensitive documents.
-        </p>
-      </footer>
+      {/* Footer - hidden in editor mode */}
+      {!file && (
+        <footer className="py-3 text-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
+          <p>Client-side processing. Verify redactions before sharing.</p>
+        </footer>
+      )}
     </div>
   );
 }
