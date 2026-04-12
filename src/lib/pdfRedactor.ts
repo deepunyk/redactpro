@@ -6,6 +6,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { PDFDocument } from 'pdf-lib';
 import type { RedactionRegion } from './types';
+import { groupRegionsByPage } from './utils';
 
 // Worker is already configured in pdfExtractor.ts, no need to set again
 
@@ -19,6 +20,8 @@ export interface RedactionOptions {
   color?: { r: number; g: number; b: number };
   /** Whether to show progress updates */
   onProgress?: (current: number, total: number) => void;
+  /** Abort signal for cancelling the operation */
+  signal?: AbortSignal;
 }
 
 /**
@@ -33,7 +36,12 @@ export async function redactPDF(
   regions: RedactionRegion[],
   options: RedactionOptions = {}
 ): Promise<Uint8Array> {
-  const { scale = 2.0, color = { r: 0, g: 0, b: 0 }, onProgress } = options;
+  const { scale = 2.0, color = { r: 0, g: 0, b: 0 }, onProgress, signal } = options;
+
+  // Check if already aborted
+  if (signal?.aborted) {
+    throw new DOMException('Redaction operation was cancelled', 'AbortError');
+  }
 
   // Load the original PDF
   const originalPdf = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
@@ -47,6 +55,11 @@ export async function redactPDF(
 
   // Process each page
   for (let i = 1; i <= totalPages; i++) {
+    // Check for abort signal
+    if (signal?.aborted) {
+      throw new DOMException('Redaction operation was cancelled', 'AbortError');
+    }
+
     // Report progress
     onProgress?.(i, totalPages);
 
@@ -108,18 +121,20 @@ function drawRedactionBox(
   // PDF coordinates: origin at bottom-left, Y increases upward
   // Canvas coordinates: origin at top-left, Y increases downward
   const canvasX = region.x * scale;
-  // Flip Y: canvasY from top = totalHeight - pdfY from bottom
-  const canvasY = viewport.height - (region.y * scale);
   const canvasWidth = region.width * scale;
   const canvasHeight = region.height * scale;
+
+  // Flip Y: Calculate baseline position, then subtract height to get top position
+  // PDF stores text baseline Y, so we need to convert to top-left corner for canvas
+  const baselineY = viewport.height - (region.y * scale);
+  const canvasY = baselineY - canvasHeight;
 
   // Add a small padding to ensure full coverage
   const padding = 2;
   context.fillStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
-  // Draw from the top-left corner of the box (canvasY - canvasHeight)
   context.fillRect(
     canvasX - padding,
-    canvasY - canvasHeight - padding,
+    canvasY - padding,
     canvasWidth + (padding * 2),
     canvasHeight + (padding * 2)
   );
@@ -139,21 +154,4 @@ function canvasToBytes(canvas: HTMLCanvasElement): Promise<Uint8Array> {
       resolve(new Uint8Array(buffer));
     }, 'image/png');
   });
-}
-
-/**
- * Group redaction regions by page number
- */
-function groupRegionsByPage(regions: RedactionRegion[]): Record<number, RedactionRegion[]> {
-  const grouped: Record<number, RedactionRegion[]> = {};
-
-  for (const region of regions) {
-    const pageNum = region.pageNumber;
-    if (!grouped[pageNum]) {
-      grouped[pageNum] = [];
-    }
-    grouped[pageNum].push(region);
-  }
-
-  return grouped;
 }

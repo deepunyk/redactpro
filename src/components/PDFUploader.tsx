@@ -9,19 +9,37 @@ interface PDFUploaderProps {
   onFileSelect: (file: File) => void;
   disabled?: boolean;
   accept?: string;
+  maxSizeMB?: number;
+  onError?: (error: string) => void;
 }
 
 export const PDFUploader: React.FC<PDFUploaderProps> = ({
   onFileSelect,
   disabled = false,
   accept = 'application/pdf',
+  maxSizeMB = 50,
+  onError,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const validateFileSize = (file: File): boolean => {
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      const errorMsg = `File size exceeds ${maxSizeMB}MB limit. Please choose a smaller file.`;
+      setError(errorMsg);
+      onError?.(errorMsg);
+      return false;
+    }
+    setError(null);
+    return true;
+  };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     if (!disabled) {
       setIsDragging(true);
+      setError(null); // Clear error when dragging starts
     }
   }, [disabled]);
 
@@ -41,20 +59,36 @@ export const PDFUploader: React.FC<PDFUploaderProps> = ({
       const pdfFile = files.find((file) => file.type === 'application/pdf');
 
       if (pdfFile) {
-        onFileSelect(pdfFile);
+        if (validateFileSize(pdfFile)) {
+          onFileSelect(pdfFile);
+        }
+      } else {
+        const errorMsg = 'Please drop a valid PDF file.';
+        setError(errorMsg);
+        onError?.(errorMsg);
       }
     },
-    [disabled, onFileSelect]
+    [disabled, onFileSelect, validateFileSize, maxSizeMB, onError]
   );
 
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
+      setError(null); // Clear previous error
       const files = e.target.files;
       if (files && files[0]) {
-        onFileSelect(files[0]);
+        const file = files[0];
+        if (file.type !== 'application/pdf') {
+          const errorMsg = 'Please select a valid PDF file.';
+          setError(errorMsg);
+          onError?.(errorMsg);
+          return;
+        }
+        if (validateFileSize(file)) {
+          onFileSelect(file);
+        }
       }
     },
-    [onFileSelect]
+    [onFileSelect, validateFileSize, onError]
   );
 
   return (
@@ -66,6 +100,8 @@ export const PDFUploader: React.FC<PDFUploaderProps> = ({
         relative border-2 border-dashed rounded-lg p-10 text-center transition-all
         ${isDragging
           ? 'border-gray-400 bg-gray-50 dark:bg-gray-900'
+          : error
+          ? 'border-red-400 bg-red-50 dark:bg-red-900/20'
           : 'border-gray-300 dark:border-gray-700'
         }
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-gray-400 dark:hover:border-gray-600'}
@@ -107,8 +143,14 @@ export const PDFUploader: React.FC<PDFUploaderProps> = ({
         </div>
 
         <p className="text-xs text-gray-400 dark:text-gray-500">
-          Maximum file size: 50MB
+          Maximum file size: {maxSizeMB}MB
         </p>
+
+        {error && (
+          <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+            {error}
+          </p>
+        )}
       </div>
     </div>
   );

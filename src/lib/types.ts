@@ -36,6 +36,8 @@ export interface PageContent {
  * A region that should be redacted
  */
 export interface RedactionRegion {
+  /** Unique identifier for this region (stable across position changes) */
+  id: string;
   /** Page number where this region exists (1-indexed) */
   pageNumber: number;
   /** X coordinate of the redaction region */

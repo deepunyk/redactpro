@@ -24,11 +24,9 @@ const DEFAULT_CONFIG: MatcherConfig = {
 };
 
 /**
- * Find all occurrences of keywords in extracted PDF text
- * @param pages - Array of page contents with text items
- * @param keywords - Array of keywords to search for
- * @param config - Optional matcher configuration
- * @returns Array of redaction regions where keywords were found
+ * Find all occurrences of keywords in extracted PDF text.
+ * Creates one redaction region per occurrence, covering only the matched text
+ * (not the entire PDF.js text item).
  */
 export function findMatches(
   pages: PageContent[],
@@ -43,35 +41,32 @@ export function findMatches(
   const matches: RedactionRegion[] = [];
 
   // Pre-process keywords based on case sensitivity
-  const processedKeywords = keywords.map(kw =>
-    caseSensitive ? kw : kw.toLowerCase()
-  );
+  const processedKeywords = keywords.map(kw => ({
+    original: kw,
+    processed: caseSensitive ? kw : kw.toLowerCase(),
+  }));
 
   for (const page of pages) {
     for (const item of page.items) {
       const textToCheck = caseSensitive ? item.text : item.text.toLowerCase();
+      const charWidth = item.text.length > 0 ? item.width / item.text.length : 0;
 
-      for (const keyword of processedKeywords) {
-        let isMatch = false;
+      for (const { original, processed } of processedKeywords) {
+        // Find all match positions within this text item
+        const matchPositions = wholeWordOnly
+          ? findWholeWordMatches(item.text, processed, !!caseSensitive)
+          : findSubstringMatches(textToCheck, processed);
 
-        if (wholeWordOnly) {
-          // Match whole words only using word boundaries
-          const wordBoundaryRegex = new RegExp(`\\b${escapeRegex(keyword)}\\b`, caseSensitive ? '' : 'i');
-          isMatch = wordBoundaryRegex.test(item.text);
-        } else {
-          // Match anywhere in the text
-          isMatch = textToCheck.includes(keyword);
-        }
-
-        if (isMatch) {
+        for (const { index, length } of matchPositions) {
           matches.push({
+            id: crypto.randomUUID(),
             pageNumber: page.pageNumber,
-            x: item.x,
+            x: item.x + index * charWidth,
             y: item.y,
-            width: item.width,
+            width: length * charWidth,
             height: item.height,
-            matchedText: item.text,
-            keyword: keyword,
+            matchedText: item.text.substring(index, index + length),
+            keyword: original,
           });
         }
       }
@@ -82,9 +77,48 @@ export function findMatches(
 }
 
 /**
+ * Find all whole-word matches using regex with word boundaries.
+ * Returns match positions (index + length) within the text.
+ */
+function findWholeWordMatches(
+  text: string,
+  keyword: string,
+  caseSensitive: boolean
+): Array<{ index: number; length: number }> {
+  const results: Array<{ index: number; length: number }> = [];
+  const regex = new RegExp(`\\b${escapeRegex(keyword)}\\b`, caseSensitive ? 'g' : 'gi');
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    results.push({ index: match.index, length: match[0].length });
+  }
+
+  return results;
+}
+
+/**
+ * Find all substring matches.
+ * Returns match positions (index + length) within the text.
+ */
+function findSubstringMatches(
+  textToCheck: string,
+  keyword: string
+): Array<{ index: number; length: number }> {
+  const results: Array<{ index: number; length: number }> = [];
+  let searchFrom = 0;
+
+  while (searchFrom < textToCheck.length) {
+    const foundAt = textToCheck.indexOf(keyword, searchFrom);
+    if (foundAt === -1) break;
+    results.push({ index: foundAt, length: keyword.length });
+    searchFrom = foundAt + 1;
+  }
+
+  return results;
+}
+
+/**
  * Escape special regex characters in a string
- * @param str - String to escape
- * @returns Escaped string safe for use in regex
  */
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -92,35 +126,11 @@ function escapeRegex(str: string): string {
 
 /**
  * Count matches per keyword
- * @param regions - Array of redaction regions
- * @returns Object mapping keywords to their match counts
  */
 export function countMatchesByKeyword(regions: RedactionRegion[]): Record<string, number> {
   const counts: Record<string, number> = {};
-
   for (const region of regions) {
-    const keyword = region.keyword;
-    counts[keyword] = (counts[keyword] || 0) + 1;
+    counts[region.keyword] = (counts[region.keyword] || 0) + 1;
   }
-
   return counts;
-}
-
-/**
- * Group redaction regions by page number
- * @param regions - Array of redaction regions
- * @returns Object mapping page numbers to their regions
- */
-export function groupRegionsByPage(regions: RedactionRegion[]): Record<number, RedactionRegion[]> {
-  const grouped: Record<number, RedactionRegion[]> = {};
-
-  for (const region of regions) {
-    const pageNum = region.pageNumber;
-    if (!grouped[pageNum]) {
-      grouped[pageNum] = [];
-    }
-    grouped[pageNum].push(region);
-  }
-
-  return grouped;
 }

@@ -3,12 +3,12 @@
  * Orchestrates the PDF redaction workflow
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { PDFUploader } from './components/PDFUploader';
 import { PDFViewer } from './components/PDFViewer';
 import { KeywordInput } from './components/KeywordInput';
 import { DownloadButton } from './components/DownloadButton';
-import { extractTextContent, findMatches } from './lib';
+import { extractTextContent, findMatches, PDFProcessingError, pdfCache } from './lib';
 import type { RedactionRegion } from './lib/types';
 
 function App() {
@@ -17,6 +17,7 @@ function App() {
   const [redactionRegions, setRedactionRegions] = useState<RedactionRegion[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Handle file selection
   const handleFileSelect = useCallback(async (selectedFile: File) => {
@@ -24,11 +25,13 @@ function App() {
     setKeywords([]);
     setRedactionRegions([]);
     setCurrentPage(1);
+    setError(null);
   }, []);
 
   // Handle keywords change - find matches in the PDF
   const handleKeywordsChange = useCallback(async (newKeywords: string[]) => {
     setKeywords(newKeywords);
+    setError(null);
 
     if (file && newKeywords.length > 0) {
       setIsProcessing(true);
@@ -38,6 +41,14 @@ function App() {
         setRedactionRegions(matches);
       } catch (error) {
         console.error('Error finding matches:', error);
+        let errorMessage = 'Failed to find matches in the PDF. ';
+        if (error instanceof PDFProcessingError) {
+          errorMessage += error.message;
+        } else {
+          errorMessage += 'The file may be corrupted or in an unsupported format.';
+        }
+        setError(errorMessage);
+        setRedactionRegions([]);
       } finally {
         setIsProcessing(false);
       }
@@ -47,10 +58,22 @@ function App() {
   }, [file]);
 
   const handleReset = useCallback(() => {
+    // Clear PDF cache when resetting
+    if (file) {
+      pdfCache.invalidate(file);
+    }
     setFile(null);
     setKeywords([]);
     setRedactionRegions([]);
     setCurrentPage(1);
+    setError(null);
+  }, [file]);
+
+  // Cleanup cache on unmount
+  useEffect(() => {
+    return () => {
+      pdfCache.clear();
+    };
   }, []);
 
   return (
@@ -132,6 +155,13 @@ function App() {
                   onKeywordsChange={handleKeywordsChange}
                   disabled={isProcessing}
                 />
+
+                {/* Error message */}
+                {error && (
+                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                  </div>
+                )}
 
                 {/* Match count indicator */}
                 {redactionRegions.length > 0 && (
