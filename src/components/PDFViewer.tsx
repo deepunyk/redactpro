@@ -12,6 +12,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { renderPageToCanvas, getTextLayerData } from '../lib/pdfExtractor';
 import type { RedactionRegion } from '../lib/types';
+import { MatchSimilarPopup, type SimilarMatchInfo } from './MatchSimilarPopup';
 
 /**
  * Measure the browser's actual font ascent ratio using canvas metrics.
@@ -37,6 +38,10 @@ interface PDFViewerProps {
   onPageChange: (page: number) => void;
   onRegionsChange?: (regions: RedactionRegion[]) => void;
   className?: string;
+  onManualRegionDrawn?: (region: RedactionRegion, displayPosition: { x: number; y: number }) => void;
+  similarMatchPopup?: SimilarMatchInfo | null;
+  onSimilarMatchAccept?: () => void;
+  onSimilarMatchDismiss?: () => void;
 }
 
 // Zoom preset options
@@ -84,6 +89,10 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   onPageChange,
   onRegionsChange,
   className = '',
+  onManualRegionDrawn,
+  similarMatchPopup,
+  onSimilarMatchAccept,
+  onSimilarMatchDismiss,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -546,6 +555,11 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
         };
 
         onRegionsChange([...redactionRegions, newRegion]);
+
+        // Notify parent about the new manual region for match-similar detection
+        if (onManualRegionDrawn) {
+          onManualRegionDrawn(newRegion, { x, y });
+        }
       }
 
       setDrawingState({
@@ -1085,6 +1099,15 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
                     width: Math.abs(drawingState.currentX - drawingState.startX),
                     height: Math.abs(drawingState.currentY - drawingState.startY),
                   }}
+                />
+              )}
+
+              {/* Match-similar popup */}
+              {similarMatchPopup && onSimilarMatchAccept && onSimilarMatchDismiss && (
+                <MatchSimilarPopup
+                  match={similarMatchPopup}
+                  onAccept={onSimilarMatchAccept}
+                  onDismiss={onSimilarMatchDismiss}
                 />
               )}
             </div>

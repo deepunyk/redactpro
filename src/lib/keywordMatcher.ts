@@ -4,6 +4,7 @@
  */
 
 import type { PageContent, RedactionRegion } from './types';
+import { measureSubstring, padRegion } from './textMeasurement';
 
 /**
  * Configuration for keyword matching
@@ -24,6 +25,15 @@ const DEFAULT_CONFIG: MatcherConfig = {
 };
 
 /**
+ * Check if a keyword contains characters that make word boundary matching unreliable
+ * (e.g., keywords with digits adjacent to letters, or special characters)
+ */
+function needsWordBoundaryFallback(keyword: string): boolean {
+  // Keywords starting/ending with non-word characters won't work well with \b
+  return /^[^\w]|[^\w]$/.test(keyword);
+}
+
+/**
  * Find all occurrences of keywords in extracted PDF text.
  * Creates one redaction region per occurrence, covering only the matched text
  * (not the entire PDF.js text item).
@@ -40,16 +50,20 @@ export function findMatches(
   const { caseSensitive, wholeWordOnly } = { ...DEFAULT_CONFIG, ...config };
   const matches: RedactionRegion[] = [];
 
+  // Filter out empty/whitespace-only keywords
+  const validKeywords = keywords.filter(kw => kw.trim().length > 0);
+
   // Pre-process keywords based on case sensitivity
-  const processedKeywords = keywords.map(kw => ({
+  const processedKeywords = validKeywords.map(kw => ({
     original: kw,
     processed: caseSensitive ? kw : kw.toLowerCase(),
   }));
 
   for (const page of pages) {
     for (const item of page.items) {
+      if (!item.text || item.text.trim().length === 0) continue;
+
       const textToCheck = caseSensitive ? item.text : item.text.toLowerCase();
-      const charWidth = item.text.length > 0 ? item.width / item.text.length : 0;
 
       for (const { original, processed } of processedKeywords) {
         // Find all match positions within this text item
@@ -58,13 +72,17 @@ export function findMatches(
           : findSubstringMatches(textToCheck, processed);
 
         for (const { index, length } of matchPositions) {
+          // Use canvas-based measurement for proportional fonts
+          const pos = measureSubstring(item.text, index, length, item.width, item.height);
+          const padded = padRegion(item.x + pos.offsetX, item.y, pos.width, item.height);
+
           matches.push({
             id: crypto.randomUUID(),
             pageNumber: page.pageNumber,
-            x: item.x + index * charWidth,
-            y: item.y,
-            width: length * charWidth,
-            height: item.height,
+            x: padded.x,
+            y: padded.y,
+            width: padded.width,
+            height: padded.height,
             matchedText: item.text.substring(index, index + length),
             keyword: original,
           });
@@ -78,6 +96,7 @@ export function findMatches(
 
 /**
  * Find all whole-word matches using regex with word boundaries.
+ * Handles edge cases where \b doesn't work well with special characters.
  * Returns match positions (index + length) within the text.
  */
 function findWholeWordMatches(
@@ -86,6 +105,29 @@ function findWholeWordMatches(
   caseSensitive: boolean
 ): Array<{ index: number; length: number }> {
   const results: Array<{ index: number; length: number }> = [];
+
+  // For keywords with leading/trailing non-word characters, \b doesn't work properly.
+  // Use whitespace/punctuation boundary check instead.
+  if (needsWordBoundaryFallback(keyword)) {
+    return findSubstringMatches(
+      caseSensitive ? text : text.toLowerCase(),
+      keyword
+    ).filter(({ index, length }) => {
+      // Check character before match
+      if (index > 0) {
+        const charBefore = text[index - 1];
+        if (/\w/.test(charBefore)) return false;
+      }
+      // Check character after match
+      const endIndex = index + length;
+      if (endIndex < text.length) {
+        const charAfter = text[endIndex];
+        if (/\w/.test(charAfter)) return false;
+      }
+      return true;
+    });
+  }
+
   const regex = new RegExp(`\\b${escapeRegex(keyword)}\\b`, caseSensitive ? 'g' : 'gi');
   let match: RegExpExecArray | null;
 

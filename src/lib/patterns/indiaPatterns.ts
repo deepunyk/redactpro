@@ -68,6 +68,28 @@ function validateIFSC(ifsc: string): boolean {
 }
 
 /**
+ * Validate Indian passport number
+ * Format: 1-2 letters + 7-8 digits (varies by type)
+ */
+function validatePassport(passport: string): boolean {
+  const cleaned = passport.replace(/\s/g, '').toUpperCase();
+  // Standard format: 1 letter + 7 digits
+  if (/^[A-Z]\d{7}$/.test(cleaned)) return true;
+  return false;
+}
+
+/**
+ * Validate Voter ID (EPIC)
+ * Format: 3 letters + 7 digits
+ */
+function validateVoterId(voterId: string): boolean {
+  const cleaned = voterId.replace(/\s/g, '').toUpperCase();
+  if (!/^[A-Z]{3}\d{7}$/.test(cleaned)) return false;
+  // First 3 letters should be alphabetic state code
+  return true;
+}
+
+/**
  * Luhn algorithm for credit card validation
  */
 function luhnCheck(cardNumber: string): boolean {
@@ -102,7 +124,7 @@ export const indiaPatterns: Pattern[] = [
     id: 'pan',
     name: 'PAN Number',
     description: 'Permanent Account Number (10 characters)',
-    regex: /[A-Z]{5}[0-9]{4}[A-Z]{1}/,
+    regex: /\b[A-Z]{5}[0-9]{4}[A-Z]{1}\b/i,
     validator: validatePAN,
     category: 'india',
     enabled: false,
@@ -113,8 +135,8 @@ export const indiaPatterns: Pattern[] = [
     name: 'Aadhaar Number',
     description: '12-digit unique identification number',
     regex: [
-      /\d{4}\s\d{4}\s\d{4}/,  // With spaces
-      /\d{12}/,                // Without spaces
+      /\b\d{4}\s\d{4}\s\d{4}\b/,  // With spaces (standard format)
+      /\b\d{12}\b/,                // Without spaces (must be standalone 12 digits)
     ],
     validator: validateAadhaar,
     category: 'india',
@@ -125,7 +147,7 @@ export const indiaPatterns: Pattern[] = [
     id: 'gstin',
     name: 'GSTIN',
     description: 'Goods and Services Tax Identification Number (15 characters)',
-    regex: /[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}/,
+    regex: /\b[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}\b/i,
     validator: validateGSTIN,
     category: 'india',
     enabled: false,
@@ -135,7 +157,8 @@ export const indiaPatterns: Pattern[] = [
     id: 'passport-india',
     name: 'Passport Number',
     description: 'Indian Passport (letter + 7 digits)',
-    regex: /[A-Z]{1}[0-9]{7}/,
+    regex: /\b[A-Z]\d{7}\b/i,
+    validator: validatePassport,
     category: 'india',
     enabled: false,
     icon: '🛂',
@@ -144,7 +167,8 @@ export const indiaPatterns: Pattern[] = [
     id: 'voter-id',
     name: 'Voter ID (EPIC)',
     description: 'Electoral Photo Identity Card (3 letters + 7 digits)',
-    regex: /[A-Z]{3}[0-9]{7}/,
+    regex: /\b[A-Z]{3}\d{7}\b/i,
+    validator: validateVoterId,
     category: 'india',
     enabled: false,
     icon: '🗳️',
@@ -154,9 +178,8 @@ export const indiaPatterns: Pattern[] = [
     name: 'Driving License',
     description: 'Driving License number (format varies by state)',
     regex: [
-      /[A-Z]{2}[0-9]{11}/,     // MH14 1234567890
-      /[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}/,  // DL-01 2012001234
-      /[A-Z]{2}[0-9]{13}/,     // Some states
+      /\b[A-Z]{2}\d{2}\s?\d{4,11}\b/i,       // Standard: SS DD XXXXXXXX
+      /\b[A-Z]{2}-?\d{2}-?\d{4,11}\b/i,       // With dashes: SS-DD-XXXXXXXX
     ],
     category: 'india',
     enabled: false,
@@ -166,7 +189,7 @@ export const indiaPatterns: Pattern[] = [
     id: 'ifsc',
     name: 'IFSC Code',
     description: 'Indian Financial System Code (11 characters)',
-    regex: /[A-Z]{4}0[A-Z0-9]{6}/,
+    regex: /\b[A-Z]{4}0[A-Z0-9]{6}\b/i,
     validator: validateIFSC,
     category: 'india',
     enabled: false,
@@ -175,8 +198,10 @@ export const indiaPatterns: Pattern[] = [
   {
     id: 'upi-id',
     name: 'UPI ID',
-    description: 'Unified Payments Interface identifier',
-    regex: /[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+/,
+    description: 'Unified Payments Interface identifier (name@bank)',
+    // UPI IDs use specific handles like @paytm, @ybl, @upi, @oksbi etc.
+    // Differentiate from email by requiring known UPI handles OR short domain-like suffixes
+    regex: /\b[a-zA-Z0-9._-]+@(?:paytm|ybl|upi|oksbi|okaxis|okhdfcbank|okicici|oksbi|apl|ibl|freecharge|airtel|jio|phonepe|amazon|razorpay|fbpay|gpay|gojek|grab|paypal|stripe)[a-zA-Z0-9.-]*/i,
     category: 'india',
     enabled: false,
     icon: '💳',
@@ -190,11 +215,11 @@ export const financialPatterns: Pattern[] = [
   {
     id: 'credit-card',
     name: 'Credit/Debit Card',
-    description: 'Card number (13-19 digits)',
+    description: 'Card number (13-19 digits with separators)',
     regex: [
-      /\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}/,  // 16 digits with separators
-      /\d{4}[-\s]?\d{6}[-\s]?\d{5}/,              // Amex format
-      /\d{13,19}/,                                  // Raw digits
+      /\b\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4}\b/,     // 16 digits with separators
+      /\b\d{4}[-\s]\d{6}[-\s]\d{5}\b/,                 // Amex format with separators
+      /\b\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{3}\b/,      // 15 digits (Amex) with separators
     ],
     validator: luhnCheck,
     category: 'global',
@@ -205,7 +230,11 @@ export const financialPatterns: Pattern[] = [
     id: 'bank-account',
     name: 'Bank Account Number',
     description: 'Bank account number (9-18 digits)',
-    regex: /\b\d{9,18}\b/,
+    // Use context-aware matching: look for account-related keywords nearby
+    regex: [
+      /(?:Account|A\/c|Acct|A\/C\s*No)[:.\s]*\d{9,18}\b/i,
+      /\b\d{9,18}\b/,
+    ],
     category: 'global',
     enabled: false,
     icon: '🏦',
@@ -214,7 +243,7 @@ export const financialPatterns: Pattern[] = [
     id: 'cvv',
     name: 'CVV/CVC',
     description: 'Card verification value (3-4 digits)',
-    regex: /\b(?:CVV|CVC)[:\s]*\d{3,4}\b/i,
+    regex: /\b(?:CVV|CVC|CV2|Security\s*Code)[:\s]*\d{3,4}\b/i,
     category: 'global',
     enabled: false,
     icon: '🔒',

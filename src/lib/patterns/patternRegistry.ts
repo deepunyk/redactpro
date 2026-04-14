@@ -168,11 +168,22 @@ export class PatternRegistry {
   private detectInText(text: string, pattern: Pattern): RegExpMatchArray[] {
     const regexes = Array.isArray(pattern.regex) ? pattern.regex : [pattern.regex];
     const allMatches: RegExpMatchArray[] = [];
+    const seen = new Set<string>();
 
     regexes.forEach(regex => {
-      const matches = text.matchAll(new RegExp(regex, 'gi'));
+      // Ensure both 'g' and 'i' flags for global case-insensitive matching
+      let flags = regex.flags;
+      if (!flags.includes('g')) flags += 'g';
+      if (!flags.includes('i')) flags += 'i';
+      const matches = text.matchAll(new RegExp(regex.source, flags));
+
       for (const match of matches) {
         if (match[0]) {
+          // Deduplicate by matched text + position
+          const key = `${match.index}:${match[0]}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+
           // Validate match if validator exists
           if (pattern.validator) {
             try {
